@@ -29,6 +29,7 @@ import { LegacyOrdersModule } from '@modules/legacy-orders/legacy-orders.module'
 import { CartModule } from '@modules/carts/cart.module';
 import { SaleEventsModule } from './modules/sale-events/sale-events.module';
 import { QuickLinksModule } from './modules/quick-links/quick-links.module';
+import { AiSearchModule } from './modules/ai-search/ai-search.module';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { QuickLinksModule } from './modules/quick-links/quick-links.module';
     OrdersModule,
     AlertsModule,
     ListingsModule,
+    AiSearchModule,
     JwtModule.registerAsync({
       useFactory: async (env: EnvService) => ({
         secret: env.jwtSecret,

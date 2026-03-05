@@ -2,7 +2,7 @@ import { MikroORM } from '@mikro-orm/core';
 import { MySqlDriver } from '@mikro-orm/mysql';
 import { TsMorphMetadataProvider } from '@mikro-orm/reflection';
 import { QdrantClient } from '@qdrant/js-client-rest';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 import { config } from 'dotenv';
 import { resolve } from 'path';
 import { Listing } from '@modules/listings/entities/listing.entity';
@@ -13,12 +13,12 @@ const envPath = resolve(process.cwd(), 'env', '.env.development');
 config({ path: envPath });
 
 // Configuration constants
-const VECTOR_SIZE = 3072; // Gemini embedding-001 outputs 3072 dims
-const BATCH_SIZE = 20; // Gemini free tier: keep batches smaller to avoid rate limits
+const VECTOR_SIZE = 1536; // OpenAI text-embedding-3-small outputs 1536 dims
+const BATCH_SIZE = 50; // OpenAI can handle larger batches
 const COLLECTION = process.env.QDRANT_COLLECTION ?? 'techbazaar_products';
 
 // Initialize clients
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const qdrant = new QdrantClient({ url: process.env.QDRANT_URL });
 
 // Types
@@ -46,7 +46,7 @@ interface ProcessingResult {
 async function initializeDatabase(): Promise<MikroORM<MySqlDriver>> {
   try {
     console.log('🔌 Connecting to database...');
-    
+
     const orm = await MikroORM.init<MySqlDriver>({
       host: process.env.DATABASE_HOST,
       port: parseInt(process.env.DATABASE_PORT || '3306'),
@@ -73,7 +73,7 @@ async function initializeDatabase(): Promise<MikroORM<MySqlDriver>> {
 async function fetchActiveListings(orm: MikroORM<MySqlDriver>): Promise<Listing[]> {
   try {
     console.log('📦 Fetching active listings...');
-    
+
     const em = orm.em.fork();
     const listings = await em.find(
       Listing,
@@ -82,23 +82,16 @@ async function fetchActiveListings(orm: MikroORM<MySqlDriver>): Promise<Listing[
         isDeleted: false,
       },
       {
-        populate: [
-          'brand',
-          'category',
-          'condition',
-          'item',
-          'listingSpecification',
-          'listingPrice',
-        ],
-      }
+        populate: ['brand', 'category', 'condition', 'item', 'listingSpecification', 'listingPrice'],
+      },
     );
 
     console.log(`✅ Found ${listings.length} active listings`);
-    
+
     if (listings.length === 0) {
       console.log('ℹ️  No active listings to process. Exiting.');
     }
-    
+
     return listings;
   } catch (error) {
     console.error('❌ Failed to fetch listings:', error);
@@ -151,12 +144,7 @@ function constructListingText(listing: Listing): string {
   // Storage
   const primaryStorageType = listing.listingSpecification?.primaryStorageType;
   const primaryStorageCapacity = listing.listingSpecification?.primaryStorageCapacity;
-  if (
-    primaryStorageType &&
-    primaryStorageCapacity &&
-    primaryStorageType !== 'ns' &&
-    primaryStorageCapacity !== '-1'
-  ) {
+  if (primaryStorageType && primaryStorageCapacity && primaryStorageType !== 'ns' && primaryStorageCapacity !== '-1') {
     parts.push(`Storage: ${primaryStorageCapacity}GB ${primaryStorageType}`);
   }
 
@@ -197,9 +185,9 @@ function constructListingText(listing: Listing): string {
 async function ensureCollection(): Promise<void> {
   try {
     console.log('🔍 Checking Qdrant collection...');
-    
+
     const collections = await qdrant.getCollections();
-    const exists = collections.collections.some((c) => c.name === COLLECTION);
+    const exists = collections.collections.some(c => c.name === COLLECTION);
 
     if (!exists) {
       console.log(`📝 Creating collection: ${COLLECTION}`);
@@ -221,22 +209,14 @@ async function ensureCollection(): Promise<void> {
 
 // ─── Generate Embeddings ──────────────────────────────────────────────────────
 
-async function generateEmbeddings(
-  texts: string[],
-  batchNumber: number
-): Promise<number[][]> {
+async function generateEmbeddings(texts: string[], batchNumber: number): Promise<number[][]> {
   try {
-    // Gemini embeds one at a time in a batchEmbedContents call
-    const embedRequests = texts.map(text => ({
-      content: { parts: [{ text }], role: 'user' as const },
-    }));
-
-    const embedModel = genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
-    const { embeddings } = await embedModel.batchEmbedContents({
-      requests: embedRequests,
+    const response = await openai.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: texts,
     });
 
-    return embeddings.map((embedding) => embedding.values);
+    return response.data.map(item => item.embedding);
   } catch (error) {
     console.error(`❌ Embedding generation failed for batch ${batchNumber}:`, error);
     return [];
@@ -305,11 +285,8 @@ async function processBatches(listings: Listing[]): Promise<ProcessingResult> {
 
       result.successfullyStored += points.length;
       console.log(
-        `✅ Batch ${batchNumber}/${totalBatches} complete - ${i + batch.length}/${listings.length} listings processed`
+        `✅ Batch ${batchNumber}/${totalBatches} complete - ${i + batch.length}/${listings.length} listings processed`,
       );
-      
-      // Small delay to respect Gemini free tier rate limits
-      await new Promise(r => setTimeout(r, 500));
     } catch (error) {
       console.error(`❌ Failed to upsert batch ${batchNumber}:`, error);
       result.failedBatches.push(batchNumber);
@@ -325,7 +302,7 @@ async function processBatches(listings: Listing[]): Promise<ProcessingResult> {
 
 async function main(): Promise<void> {
   const startTime = Date.now();
-  console.log('🚀 Starting catalog embedding script with Gemini...');
+  console.log('🚀 Starting catalog embedding script with OpenAI...');
   console.log(`📅 Started at: ${new Date().toISOString()}\n`);
 
   let orm: MikroORM<MySqlDriver> | null = null;
@@ -374,7 +351,7 @@ async function main(): Promise<void> {
 }
 
 // Execute
-main().catch((error) => {
+main().catch(error => {
   console.error('💥 Unhandled error:', error);
   process.exit(1);
 });

@@ -3,6 +3,7 @@
 ## Step 1: Install and Run Qdrant
 
 Using Docker (recommended):
+
 ```bash
 docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
 ```
@@ -14,8 +15,8 @@ Or download from: https://qdrant.tech/documentation/quick-start/
 Check `env/.env.development` has these variables:
 
 ```env
-# Gemini AI Configuration
-GEMINI_API_KEY=your-gemini-api-key
+# OpenAI Configuration
+OPENAI_API_KEY=your-openai-api-key
 
 # Qdrant Configuration
 QDRANT_URL=http://localhost:6333
@@ -29,7 +30,7 @@ DATABASE_PASSWORD=1OtVcJqWHzMgqnX
 DATABASE_NAME=live_090425
 ```
 
-Get your Gemini API key from: https://makersuite.google.com/app/apikey
+Get your OpenAI API key from: https://platform.openai.com/api-keys
 
 ## Step 3: Run the Script
 
@@ -40,7 +41,7 @@ npm run embed:catalog
 ## Expected Output
 
 ```
-🚀 Starting catalog embedding script with Gemini...
+🚀 Starting catalog embedding script with OpenAI...
 📅 Started at: 2026-03-06T10:30:00.000Z
 
 🔌 Connecting to database...
@@ -81,6 +82,7 @@ curl http://localhost:6333/collections/techbazaar_products
 ```
 
 You should see:
+
 ```json
 {
   "result": {
@@ -100,30 +102,36 @@ You should see:
 ## Common Issues
 
 ### "Database connection failed"
+
 - Check database credentials
 - Ensure database is accessible
 
 ### "Qdrant connection failed"
+
 - Verify Qdrant is running: `docker ps`
 - Check URL is correct: `http://localhost:6333`
 
-### "Gemini API error"
+### "OpenAI API error"
+
 - Verify API key is valid
-- Check Google Cloud project has Generative AI API enabled
-- Review rate limits (script includes 500ms delays between batches)
+- Check OpenAI account has sufficient credits
+- Review rate limits
 
 ### "No active listings found"
+
 - Check listings have status: `"Validated,Active"`
 - Verify `isDeleted = false`
 
 ## Re-running the Script
 
 The script is idempotent - you can safely re-run it:
+
 - Existing embeddings will be updated
 - New listings will be added
 - Deleted/inactive listings remain in Qdrant (won't be updated)
 
 Run it whenever you:
+
 - Add new products
 - Update product information
 - Change product specifications

@@ -1,21 +1,24 @@
 # Catalog Embedding Script
 
-This script generates vector embeddings for product listings in the TechBazaar marketplace using Google's Gemini AI and stores them in Qdrant vector database for semantic search capabilities.
+This script generates vector embeddings for product listings in the TechBazaar marketplace using OpenAI and stores them in Qdrant vector database for semantic search capabilities.
 
 ## Prerequisites
 
 1. **Qdrant Vector Database**: Make sure Qdrant is running and accessible
+
    - Default URL: `http://localhost:6333`
    - You can run Qdrant using Docker:
      ```bash
      docker run -p 6333:6333 qdrant/qdrant
      ```
 
-2. **Gemini API Key**: Set your Gemini API key in `env/.env.development`
+2. **OpenAI API Key**: Set your OpenAI API key in `env/.env.development`
+
    ```
-   GEMINI_API_KEY=your-api-key-here
+   OPENAI_API_KEY=your-api-key-here
    ```
-   Get your API key from: https://makersuite.google.com/app/apikey
+
+   Get your API key from: https://platform.openai.com/api-keys
 
 3. **Qdrant Configuration**: Configure Qdrant connection in `env/.env.development`
    ```
@@ -45,7 +48,7 @@ npx ts-node -r tsconfig-paths/register src/scripts/embed-catalog.ts
    - Title, brand, category, condition
    - Model, processor, RAM, storage
    - Graphics card, screen size, price
-4. **Generates embeddings** using Google's `embedding-001` model (3072 dimensions)
+4. **Generates embeddings** using OpenAI's `text-embedding-3-small` model (1536 dimensions)
 5. **Stores embeddings** in Qdrant with metadata for filtering:
    - listingId, title, brand, category
    - price, currency, quantity, image, URL
@@ -53,18 +56,17 @@ npx ts-node -r tsconfig-paths/register src/scripts/embed-catalog.ts
 ## Features
 
 - ✅ **Idempotent**: Can be re-run safely to update embeddings
-- ✅ **Batch Processing**: Processes 20 listings at a time (optimized for Gemini free tier)
+- ✅ **Batch Processing**: Processes 50 listings at a time (optimized for OpenAI)
 - ✅ **Error Resilient**: Continues processing even if individual batches fail
 - ✅ **Progress Logging**: Shows detailed progress and summary
 - ✅ **Metadata Storage**: Stores filterable metadata with each embedding
-- ✅ **Rate Limit Friendly**: Includes delays to respect Gemini API rate limits
 
 ## Output
 
 The script provides detailed logging:
 
 ```
-🚀 Starting catalog embedding script with Gemini...
+🚀 Starting catalog embedding script with OpenAI...
 📅 Started at: 2026-03-06T10:30:00.000Z
 
 🔌 Connecting to database...
@@ -102,20 +104,23 @@ The script provides detailed logging:
 ## Troubleshooting
 
 ### Database Connection Failed
+
 - Check your database credentials in `env/.env.development`
 - Ensure the database is accessible from your machine
 
 ### Qdrant Connection Failed
+
 - Verify Qdrant is running: `curl http://localhost:6333/collections`
 - Check the `QDRANT_URL` in your environment file
 
-### Gemini API Errors
+### OpenAI API Errors
+
 - Verify your API key is valid
-- Check your Google Cloud project has the Generative AI API enabled
+- Check your OpenAI account has sufficient credits
 - Review rate limits if processing large catalogs
-- The script includes 500ms delays between batches to respect rate limits
 
 ### No Active Listings Found
+
 - Check that listings have status `"Validated,Active"`
 - Verify `isDeleted` is `false` for your listings
 - Review the database query in the script
@@ -123,19 +128,25 @@ The script provides detailed logging:
 ## Configuration
 
 ### Batch Size
-Default: 20 listings per batch (optimized for Gemini free tier). Modify in the script:
+
+Default: 50 listings per batch (optimized for OpenAI). Modify in the script:
+
 ```typescript
-const BATCH_SIZE = 20;
+const BATCH_SIZE = 50;
 ```
 
 ### Vector Size
-Default: 3072 (for Gemini embedding-001). Do not modify unless using a different model:
+
+Default: 1536 (for OpenAI text-embedding-3-small). Do not modify unless using a different model:
+
 ```typescript
-const VECTOR_SIZE = 3072;
+const VECTOR_SIZE = 1536;
 ```
 
 ### Collection Name
+
 Default: `techbazaar_products`. Change via environment variable:
+
 ```
 QDRANT_COLLECTION=your-collection-name
 ```
